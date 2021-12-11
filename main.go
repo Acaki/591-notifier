@@ -49,6 +49,7 @@ func main() {
 		log.Fatal(err)
 	}
 	for {
+		log.Printf("Start retrieving new houses...")
 		var rentItems []*cdp.Node
 		err = chromedp.Run(ctx,
 			chromedp.WaitVisible("#rent-list-app"),
@@ -106,6 +107,7 @@ func main() {
 
 		sendToDiscord(newLinks)
 
+		log.Printf("Round finished, sleeping for 5 minutes...")
 		time.Sleep(5 * time.Minute)
 		err = chromedp.Run(ctx, chromedp.Reload())
 		if err != nil {
@@ -133,6 +135,7 @@ func initDb() *gorm.DB {
 }
 
 func sendToDiscord(links []string) *http.Response {
+	log.Printf("Sending %d new houses to discord...", len(links))
 	body := map[string]string{"content": strings.Join(links, "\n\n")}
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
