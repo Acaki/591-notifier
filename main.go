@@ -44,7 +44,7 @@ func main() {
 	ctx, cancel = chromedp.NewContext(ctx)
 	defer cancel()
 
-	err := chromedp.Run(ctx, chromedp.Navigate(os.Getenv("591_SEARCH_URL")))
+	err := chromedp.Run(ctx, chromedp.Navigate(os.Getenv("SEARCH_URL")))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -119,7 +119,13 @@ func main() {
 func initEnv() {
 	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatal(err)
+		log.Printf(".env file not found, skipping...")
+	}
+	if os.Getenv("SEARCH_URL") == "" {
+		log.Fatal("SEARCH_URL env not set, exiting...")
+	}
+	if os.Getenv("DISCORD_WEBHOOK_URL") == "" {
+		log.Fatal("DISCORD_WEBHOOK_URL env not set, exiting...")
 	}
 }
 
