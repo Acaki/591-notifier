@@ -52,7 +52,7 @@ func main() {
 	ctx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
 	defer cancel()
 
-	//ctx, cancel = context.WithTimeout(ctx, 15*time.Second)
+	ctx, cancel = context.WithTimeout(ctx, 15*time.Second)
 	ctx, cancel = chromedp.NewContext(ctx)
 	defer cancel()
 
