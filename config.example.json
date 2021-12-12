@@ -1,0 +1,10 @@
+{
+  "refreshIntervalMinutes": 5,
+  "subscriptions": [
+    {
+      "name": "Your subscription name",
+      "searchUrl": "https://rent.591.com.tw/?region=1&kind=1&showMore=1&order=posttime&orderType=desc",
+      "discordWebhookUrl": "https://discord.com/api/webhooks/<id>/<token>"
+    }
+  ]
+}
