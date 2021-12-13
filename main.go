@@ -126,7 +126,7 @@ func main() {
 					house.Id, house.Type, house.Layout, house.Floor, house.Area, house.Address,
 				)
 				if result.Error != gorm.ErrRecordNotFound {
-					db.Delete(&dupHouse)
+					db.Unscoped().Delete(&dupHouse)
 					db.Create(&house)
 				} else {
 					if db.Create(&house).Error == nil {
