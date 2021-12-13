@@ -1,4 +1,5 @@
 {
+  "dbDsn": "test.db",
   "refreshIntervalMinutes": 5,
   "subscriptions": [
     {

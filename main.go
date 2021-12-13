@@ -35,6 +35,9 @@ var subscriptions []map[string]string
 func init() {
 	viper.SetConfigType("json")
 	viper.AddConfigPath(".")
+	viper.AddConfigPath("/config")
+	viper.SetDefault("dbDsn", "test.db")
+	viper.SetDefault("refreshIntervalMinutes", 10)
 	err := viper.ReadInConfig()
 	if err != nil {
 		log.Fatal(err)
@@ -43,6 +46,7 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	viper.WatchConfig()
 }
 
 func main() {
@@ -143,7 +147,7 @@ func main() {
 }
 
 func initDb() *gorm.DB {
-	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	db, err := gorm.Open(sqlite.Open(viper.GetString("dbDsn")), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		log.Fatal(err)
 	}
