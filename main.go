@@ -87,38 +87,38 @@ func main() {
 				house.Id = rentItem.AttributeValue("data-bind")
 				err = chromedp.Run(ctx, chromedp.Text("div.item-title", &house.Title, chromedp.ByQuery, chromedp.FromNode(rentItem)))
 				if err != nil {
-					log.Fatal("Failed to retrieve item title")
+					log.Println("Failed to retrieve item title")
 				}
 
 				var ok bool
 				err = chromedp.Run(ctx, chromedp.AttributeValue("a", "href", &house.Link, &ok, chromedp.ByQuery, chromedp.FromNode(rentItem)))
 				if err != nil || !ok {
-					log.Fatal("Failed to retrieve item link")
+					log.Println("Failed to retrieve item link")
 				}
 
 				var itemStyles []*cdp.Node
 				err = chromedp.Run(ctx, chromedp.Nodes("ul.item-style > li", &itemStyles, chromedp.ByQueryAll, chromedp.FromNode(rentItem)))
 				if err != nil {
-					log.Fatal("Failed to retrieve item style")
+					log.Println("Failed to retrieve item style")
 				}
 				house.Type = itemStyles[0].Children[0].NodeValue
 				house.Layout = itemStyles[1].Children[0].NodeValue
 				house.Size = itemStyles[2].Children[0].NodeValue
 				house.Floor = itemStyles[3].Children[0].NodeValue
 
-				err = chromedp.Run(ctx, chromedp.Text("div.item-area > a", &house.Area, chromedp.ByQuery, chromedp.FromNode(rentItem)))
+				err = chromedp.Run(ctx, chromedp.Text("div.item-area > a", &house.Area, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
 				if err != nil {
-					log.Fatal("Failed to retrieve item area")
+					log.Println("Failed to retrieve item area")
 				}
 
 				err = chromedp.Run(ctx, chromedp.Text("div.item-area > span", &house.Address, chromedp.ByQuery, chromedp.FromNode(rentItem)))
 				if err != nil {
-					log.Fatal("Failed to retrieve item address")
+					log.Println("Failed to retrieve item address")
 				}
 
 				err = chromedp.Run(ctx, chromedp.Text("div.item-price", &house.Price, chromedp.ByQuery, chromedp.FromNode(rentItem)))
 				if err != nil {
-					log.Fatal("Failed to retrieve item price")
+					log.Println("Failed to retrieve item price")
 				}
 				var dupHouse House
 				result := db.First(
@@ -171,7 +171,7 @@ func sendToDiscord(name string, webhookUrl string, links []string) *http.Respons
 		bytes.NewReader(jsonBody),
 	)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 
 	return resp
