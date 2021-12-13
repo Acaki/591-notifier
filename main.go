@@ -38,6 +38,7 @@ func init() {
 	viper.AddConfigPath("/config")
 	viper.SetDefault("dbDsn", "test.db")
 	viper.SetDefault("refreshIntervalMinutes", 10)
+	viper.SetDefault("debug", false)
 	err := viper.ReadInConfig()
 	if err != nil {
 		log.Fatal(err)
@@ -51,7 +52,7 @@ func init() {
 
 func main() {
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", false),
+		chromedp.Flag("headless", !viper.GetBool("debug")),
 	)
 	ctx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
 	defer cancel()
