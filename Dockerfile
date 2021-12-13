@@ -1,8 +1,9 @@
 FROM golang:1.17.5 as build
 
 WORKDIR /project
-COPY . .
+COPY go.mod go.sum /project/
 RUN go mod download
+COPY . .
 RUN go install
 
 FROM chromedp/headless-shell:latest
