@@ -125,8 +125,9 @@ func main() {
 					db.Delete(&dupHouse)
 					db.Create(&house)
 				} else {
-					db.Create(&house)
-					newLinks = append(newLinks, house.Link)
+					if db.Create(&house).Error == nil {
+						newLinks = append(newLinks, house.Link)
+					}
 				}
 			}
 
