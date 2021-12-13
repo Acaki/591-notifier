@@ -115,10 +115,19 @@ func main() {
 				if err != nil {
 					log.Fatal("Failed to retrieve item price")
 				}
-				if db.Create(&house).Error != nil {
-					continue
+				var dupHouse House
+				result := db.First(
+					&dupHouse,
+					"id != ? AND type = ? AND layout = ? AND floor = ? AND area = ? AND address = ?",
+					house.Id, house.Type, house.Layout, house.Floor, house.Area, house.Address,
+				)
+				if result.Error != gorm.ErrRecordNotFound {
+					db.Delete(&dupHouse)
+					db.Create(&house)
+				} else {
+					db.Create(&house)
+					newLinks = append(newLinks, house.Link)
 				}
-				newLinks = append(newLinks, house.Link)
 			}
 
 			if len(newLinks) != 0 {
