@@ -85,19 +85,19 @@ func main() {
 			for _, rentItem := range rentItems {
 				var house House
 				house.Id = rentItem.AttributeValue("data-bind")
-				err = chromedp.Run(ctx, chromedp.Text("div.item-title", &house.Title, chromedp.ByQuery, chromedp.FromNode(rentItem)))
+				err = chromedp.Run(ctx, chromedp.Text("div.item-title", &house.Title, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
 				if err != nil {
 					log.Println("Failed to retrieve item title")
 				}
 
 				var ok bool
-				err = chromedp.Run(ctx, chromedp.AttributeValue("a", "href", &house.Link, &ok, chromedp.ByQuery, chromedp.FromNode(rentItem)))
+				err = chromedp.Run(ctx, chromedp.AttributeValue("a", "href", &house.Link, &ok, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
 				if err != nil || !ok {
 					log.Println("Failed to retrieve item link")
 				}
 
 				var itemStyles []*cdp.Node
-				err = chromedp.Run(ctx, chromedp.Nodes("ul.item-style > li", &itemStyles, chromedp.ByQueryAll, chromedp.FromNode(rentItem)))
+				err = chromedp.Run(ctx, chromedp.Nodes("ul.item-style > li", &itemStyles, chromedp.ByQueryAll, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
 				if err != nil {
 					log.Println("Failed to retrieve item style")
 				}
@@ -111,12 +111,12 @@ func main() {
 					log.Println("Failed to retrieve item area")
 				}
 
-				err = chromedp.Run(ctx, chromedp.Text("div.item-area > span", &house.Address, chromedp.ByQuery, chromedp.FromNode(rentItem)))
+				err = chromedp.Run(ctx, chromedp.Text("div.item-area > span", &house.Address, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
 				if err != nil {
 					log.Println("Failed to retrieve item address")
 				}
 
-				err = chromedp.Run(ctx, chromedp.Text("div.item-price", &house.Price, chromedp.ByQuery, chromedp.FromNode(rentItem)))
+				err = chromedp.Run(ctx, chromedp.Text("div.item-price", &house.Price, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
 				if err != nil {
 					log.Println("Failed to retrieve item price")
 				}
