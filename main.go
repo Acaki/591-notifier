@@ -57,87 +57,19 @@ func main() {
 	ctx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
 	defer cancel()
 
-	//ctx, cancel = context.WithTimeout(ctx, 15*time.Second)
-	ctx, cancel = chromedp.NewContext(ctx)
-	defer cancel()
+	db := initDb()
 
 	for {
 		for _, subscription := range subscriptions {
 			subscriptionName := subscription["name"]
+			searchUrl := subscription["searchUrl"]
+			discordWebhookUrl := subscription["discordWebhookUrl"]
+
 			log.Printf("Start retrieving new houses for subscription '%s' ...", subscriptionName)
-
-			err := chromedp.Run(ctx, chromedp.Navigate(subscription["searchUrl"]))
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			var rentItems []*cdp.Node
-			err = chromedp.Run(ctx,
-				chromedp.WaitVisible("#rent-list-app"),
-				chromedp.Nodes("section.vue-list-rent-item", &rentItems),
-			)
-			if err != nil {
-				log.Fatal(err)
-			}
-			db := initDb()
-
-			var newLinks []string
-			for _, rentItem := range rentItems {
-				var house House
-				house.Id = rentItem.AttributeValue("data-bind")
-				err = chromedp.Run(ctx, chromedp.Text("div.item-title", &house.Title, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
-				if err != nil {
-					log.Println("Failed to retrieve item title")
-				}
-
-				var ok bool
-				err = chromedp.Run(ctx, chromedp.AttributeValue("a", "href", &house.Link, &ok, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
-				if err != nil || !ok {
-					log.Println("Failed to retrieve item link")
-				}
-
-				var itemStyles []*cdp.Node
-				err = chromedp.Run(ctx, chromedp.Nodes("ul.item-style > li", &itemStyles, chromedp.ByQueryAll, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
-				if err != nil {
-					log.Println("Failed to retrieve item style")
-				}
-				house.Type = itemStyles[0].Children[0].NodeValue
-				house.Layout = itemStyles[1].Children[0].NodeValue
-				house.Size = itemStyles[2].Children[0].NodeValue
-				house.Floor = itemStyles[3].Children[0].NodeValue
-
-				err = chromedp.Run(ctx, chromedp.Text("div.item-area > a", &house.Area, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
-				if err != nil {
-					log.Println("Failed to retrieve item area")
-				}
-
-				err = chromedp.Run(ctx, chromedp.Text("div.item-area > span", &house.Address, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
-				if err != nil {
-					log.Println("Failed to retrieve item address")
-				}
-
-				err = chromedp.Run(ctx, chromedp.Text("div.item-price", &house.Price, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
-				if err != nil {
-					log.Println("Failed to retrieve item price")
-				}
-				var dupHouse House
-				result := db.First(
-					&dupHouse,
-					"id != ? AND type = ? AND layout = ? AND floor = ? AND area = ? AND address = ?",
-					house.Id, house.Type, house.Layout, house.Floor, house.Area, house.Address,
-				)
-				if result.Error != gorm.ErrRecordNotFound {
-					db.Unscoped().Delete(&dupHouse)
-					db.Create(&house)
-				} else {
-					if db.Create(&house).Error == nil {
-						newLinks = append(newLinks, house.Link)
-					}
-				}
-			}
+			newLinks := getNewLinks(ctx, searchUrl, db)
 
 			if len(newLinks) != 0 {
-				sendToDiscord(subscriptionName, subscription["discordWebhookUrl"], newLinks)
+				sendToDiscord(subscriptionName, discordWebhookUrl, newLinks)
 			}
 		}
 
@@ -145,6 +77,106 @@ func main() {
 		log.Printf("Round finished, sleeping for %d minutes...", sleepDuration)
 		time.Sleep(sleepDuration * time.Minute)
 	}
+}
+
+func getNewLinks(ctx context.Context, searchUrl string, db *gorm.DB) []string {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel = chromedp.NewContext(ctx)
+	defer cancel()
+
+	var newLinks []string
+	err := chromedp.Run(ctx, chromedp.Navigate(searchUrl))
+	if err != nil {
+		log.Println(err)
+		if err == context.DeadlineExceeded {
+			return newLinks
+		}
+	}
+
+	var rentItems []*cdp.Node
+	err = chromedp.Run(ctx,
+		chromedp.WaitVisible("#rent-list-app"),
+		chromedp.Nodes("section.vue-list-rent-item", &rentItems),
+	)
+	if err != nil {
+		log.Println(err)
+		if err == context.DeadlineExceeded {
+			return newLinks
+		}
+	}
+
+	for _, rentItem := range rentItems {
+		var house House
+		house.Id = rentItem.AttributeValue("data-bind")
+		err = chromedp.Run(ctx, chromedp.Text("div.item-title", &house.Title, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
+		if err != nil {
+			log.Println("Failed to retrieve item title")
+			if err == context.DeadlineExceeded {
+				break
+			}
+		}
+
+		var ok bool
+		err = chromedp.Run(ctx, chromedp.AttributeValue("a", "href", &house.Link, &ok, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
+		if err != nil || !ok {
+			log.Println("Failed to retrieve item link")
+			if err == context.DeadlineExceeded {
+				break
+			}
+		}
+
+		var itemStyles []*cdp.Node
+		err = chromedp.Run(ctx, chromedp.Nodes("ul.item-style > li", &itemStyles, chromedp.ByQueryAll, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
+		if err != nil {
+			log.Println("Failed to retrieve item style")
+			if err == context.DeadlineExceeded {
+				break
+			}
+		}
+		house.Type = itemStyles[0].Children[0].NodeValue
+		house.Layout = itemStyles[1].Children[0].NodeValue
+		house.Size = itemStyles[2].Children[0].NodeValue
+		house.Floor = itemStyles[3].Children[0].NodeValue
+
+		err = chromedp.Run(ctx, chromedp.Text("div.item-area > a", &house.Area, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
+		if err != nil {
+			log.Println("Failed to retrieve item area")
+			if err == context.DeadlineExceeded {
+				break
+			}
+		}
+
+		err = chromedp.Run(ctx, chromedp.Text("div.item-area > span", &house.Address, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
+		if err != nil {
+			log.Println("Failed to retrieve item address")
+			if err == context.DeadlineExceeded {
+				break
+			}
+		}
+
+		err = chromedp.Run(ctx, chromedp.Text("div.item-price", &house.Price, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
+		if err != nil {
+			log.Println("Failed to retrieve item price")
+			if err == context.DeadlineExceeded {
+				break
+			}
+		}
+		var dupHouse House
+		result := db.First(
+			&dupHouse,
+			"id != ? AND type = ? AND layout = ? AND floor = ? AND area = ? AND address = ?",
+			house.Id, house.Type, house.Layout, house.Floor, house.Area, house.Address,
+		)
+		if result.Error != gorm.ErrRecordNotFound {
+			db.Unscoped().Delete(&dupHouse)
+			db.Create(&house)
+		} else {
+			if db.Create(&house).Error == nil {
+				newLinks = append(newLinks, house.Link)
+			}
+		}
+	}
+	return newLinks
 }
 
 func initDb() *gorm.DB {
