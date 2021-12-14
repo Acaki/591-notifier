@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
+	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -31,6 +32,8 @@ type House struct {
 }
 
 var subscriptions []map[string]string
+var currentDsn string
+var db *gorm.DB
 
 func init() {
 	viper.SetConfigType("json")
@@ -43,11 +46,36 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = viper.UnmarshalKey("subscriptions", &subscriptions)
+	db = initDb(viper.GetString("dbDsn"))
+	loadSubscriptions()
+	viper.OnConfigChange(func(e fsnotify.Event) {
+		log.Println("Config file changed:", e.Name)
+		loadSubscriptions()
+		reloadDb(db)
+	})
+	viper.WatchConfig()
+}
+
+func reloadDb(db *gorm.DB) {
+	newDsn := viper.GetString("dbDsn")
+	if newDsn != currentDsn {
+		sqlDB, err := db.DB()
+		if err != nil {
+			log.Fatal("Failed to get db instance")
+		}
+		err = sqlDB.Close()
+		if err != nil {
+			log.Fatal("Failed to close db connection")
+		}
+		db = initDb(newDsn)
+	}
+}
+
+func loadSubscriptions() {
+	err := viper.UnmarshalKey("subscriptions", &subscriptions)
 	if err != nil {
 		log.Fatal(err)
 	}
-	viper.WatchConfig()
 }
 
 func main() {
@@ -56,8 +84,6 @@ func main() {
 	)
 	ctx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
 	defer cancel()
-
-	db := initDb()
 
 	for {
 		for _, subscription := range subscriptions {
@@ -179,8 +205,9 @@ func getNewLinks(ctx context.Context, searchUrl string, db *gorm.DB) []string {
 	return newLinks
 }
 
-func initDb() *gorm.DB {
-	db, err := gorm.Open(sqlite.Open(viper.GetString("dbDsn")), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+func initDb(dsn string) *gorm.DB {
+	currentDsn = dsn
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		log.Fatal(err)
 	}
