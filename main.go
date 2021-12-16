@@ -138,6 +138,21 @@ func getNewLinks(ctx context.Context, db *gorm.DB, searchUrl string, ruleOutSing
 	for _, rentItem := range rentItems {
 		var house House
 
+		house.Id = rentItem.AttributeValue("data-bind")
+		err = chromedp.Run(ctx, chromedp.Text("div.item-title", &house.Title, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
+		if err != nil {
+			log.Println("Failed to retrieve item title")
+			if err == context.DeadlineExceeded {
+				break
+			}
+		}
+
+		var existingHouse House
+		result := db.First(&existingHouse, "id == ?", house.Id)
+		if result.Error != gorm.ErrRecordNotFound {
+			continue
+		}
+
 		var ok bool
 		err = chromedp.Run(ctx, chromedp.AttributeValue("a", "href", &house.Link, &ok, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
 		if err != nil || !ok {
@@ -160,15 +175,6 @@ func getNewLinks(ctx context.Context, db *gorm.DB, searchUrl string, ruleOutSing
 				continue
 			}
 			cancel()
-		}
-
-		house.Id = rentItem.AttributeValue("data-bind")
-		err = chromedp.Run(ctx, chromedp.Text("div.item-title", &house.Title, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
-		if err != nil {
-			log.Println("Failed to retrieve item title")
-			if err == context.DeadlineExceeded {
-				break
-			}
 		}
 
 		var itemStyles []*cdp.Node
@@ -212,7 +218,7 @@ func getNewLinks(ctx context.Context, db *gorm.DB, searchUrl string, ruleOutSing
 			}
 		}
 		var dupHouse House
-		result := db.First(
+		result = db.First(
 			&dupHouse,
 			"id != ? AND type = ? AND layout = ? AND floor = ? AND area = ? AND address = ?",
 			house.Id, house.Type, house.Layout, house.Floor, house.Area, house.Address,
