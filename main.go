@@ -121,6 +121,7 @@ func getNewLinks(ctx context.Context, db *gorm.DB, searchUrl string, ruleOutSing
 	ctx, cancel = chromedp.NewContext(ctx)
 	defer cancel()
 
+	notify := true
 	var newLinks []string
 	var rentItems []*cdp.Node
 	err := chromedp.Run(ctx,
@@ -139,18 +140,19 @@ func getNewLinks(ctx context.Context, db *gorm.DB, searchUrl string, ruleOutSing
 		var house House
 
 		house.Id = rentItem.AttributeValue("data-bind")
+		// Skip fetching when the house id already exists in db
+		var existingHouse House
+		result := db.First(&existingHouse, "id == ?", house.Id)
+		if result.Error != gorm.ErrRecordNotFound {
+			continue
+		}
+
 		err = chromedp.Run(ctx, chromedp.Text("div.item-title", &house.Title, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
 		if err != nil {
 			log.Println("Failed to retrieve item title")
 			if err == context.DeadlineExceeded {
 				break
 			}
-		}
-
-		var existingHouse House
-		result := db.First(&existingHouse, "id == ?", house.Id)
-		if result.Error != gorm.ErrRecordNotFound {
-			continue
 		}
 
 		var ok bool
@@ -164,15 +166,15 @@ func getNewLinks(ctx context.Context, db *gorm.DB, searchUrl string, ruleOutSing
 
 		var layout string
 		if ruleOutSingleBathroom {
+			// Open the house link in new tab to get bathroom details
 			newTab, cancel := context.WithTimeout(ctx, viper.GetDuration("fetchHouseDetailTimeout")*time.Second)
 			newTab, _ = chromedp.NewContext(newTab)
 			err := chromedp.Run(newTab, chromedp.Navigate(house.Link), chromedp.WaitVisible("#houseInfo"), chromedp.Text("#houseInfo > div.house-pattern > span", &layout))
 			if err != nil {
 				log.Println("Failed to retrieve item layout in detailed link")
 			}
-			if err == context.DeadlineExceeded || strings.Contains(layout, "1衛") {
-				cancel()
-				continue
+			if strings.Contains(layout, "1衛") {
+				notify = false
 			}
 			cancel()
 		}
@@ -218,6 +220,7 @@ func getNewLinks(ctx context.Context, db *gorm.DB, searchUrl string, ruleOutSing
 			}
 		}
 		var dupHouse House
+		// Check if there's an existing house with the same properties but different ids
 		result = db.First(
 			&dupHouse,
 			"id != ? AND type = ? AND layout = ? AND floor = ? AND area = ? AND address = ?",
@@ -227,7 +230,7 @@ func getNewLinks(ctx context.Context, db *gorm.DB, searchUrl string, ruleOutSing
 			db.Unscoped().Delete(&dupHouse)
 			db.Create(&house)
 		} else {
-			if db.Create(&house).Error == nil {
+			if db.Create(&house).Error == nil && notify {
 				newLinks = append(newLinks, house.Link)
 			}
 		}
