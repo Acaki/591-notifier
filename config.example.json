@@ -2,6 +2,7 @@
   "debug": false,
   "dbDsn": "test.db",
   "refreshIntervalMinutes": 5,
+  "navigationTimeout": 60,
   "subscriptions": [
     {
       "name": "Your subscription name",

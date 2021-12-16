@@ -43,6 +43,7 @@ func init() {
 	viper.SetDefault("dbDsn", "test.db")
 	viper.SetDefault("refreshIntervalMinutes", 10)
 	viper.SetDefault("debug", false)
+	viper.SetDefault("navigationTimeout", 60)
 	err := viper.ReadInConfig()
 	if err != nil {
 		log.Fatal(err)
@@ -114,22 +115,15 @@ func main() {
 }
 
 func getNewLinks(ctx context.Context, db *gorm.DB, searchUrl string, ruleOutSingleBathroom bool) []string {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, viper.GetDuration("navigationTimeout")*time.Second)
 	defer cancel()
 	ctx, cancel = chromedp.NewContext(ctx)
 	defer cancel()
 
 	var newLinks []string
-	err := chromedp.Run(ctx, chromedp.Navigate(searchUrl))
-	if err != nil {
-		log.Println(err)
-		if err == context.DeadlineExceeded {
-			return newLinks
-		}
-	}
-
 	var rentItems []*cdp.Node
-	err = chromedp.Run(ctx,
+	err := chromedp.Run(ctx,
+		chromedp.Navigate(searchUrl),
 		chromedp.WaitVisible("#rent-list-app"),
 		chromedp.Nodes("section.vue-list-rent-item", &rentItems),
 	)
@@ -154,7 +148,7 @@ func getNewLinks(ctx context.Context, db *gorm.DB, searchUrl string, ruleOutSing
 
 		var layout string
 		if ruleOutSingleBathroom {
-			newTab, cancel := context.WithTimeout(ctx, 10*time.Second)
+			newTab, cancel := context.WithTimeout(ctx, viper.GetDuration("navigationTimeout")*time.Second)
 			newTab, _ = chromedp.NewContext(newTab)
 			err := chromedp.Run(newTab, chromedp.Navigate(house.Link), chromedp.WaitVisible("#houseInfo"), chromedp.Text("#houseInfo > div.house-pattern > span", &layout))
 			if err != nil {
