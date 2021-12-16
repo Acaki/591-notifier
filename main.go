@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
 	"github.com/fsnotify/fsnotify"
@@ -31,7 +32,7 @@ type House struct {
 	Price   string
 }
 
-var subscriptions []map[string]string
+var subscriptions []map[string]interface{}
 var currentDsn string
 var db *gorm.DB
 
@@ -87,12 +88,19 @@ func main() {
 
 	for {
 		for _, subscription := range subscriptions {
-			subscriptionName := subscription["name"]
-			searchUrl := subscription["searchUrl"]
-			discordWebhookUrl := subscription["discordWebhookUrl"]
+			subscriptionName := fmt.Sprint(subscription["name"])
+			searchUrl := fmt.Sprint(subscription["searchUrl"])
+			discordWebhookUrl := fmt.Sprint(subscription["discordWebhookUrl"])
+			var ruleOutSingleBathroom bool
+			flag, ok := subscription["ruleOutSingleBathroom"]
+			if ok && flag == true {
+				ruleOutSingleBathroom = true
+			} else {
+				ruleOutSingleBathroom = false
+			}
 
 			log.Printf("Start retrieving new houses for subscription '%s' ...", subscriptionName)
-			newLinks := getNewLinks(ctx, searchUrl, db)
+			newLinks := getNewLinks(ctx, db, searchUrl, ruleOutSingleBathroom)
 
 			if len(newLinks) != 0 {
 				sendToDiscord(subscriptionName, discordWebhookUrl, newLinks)
@@ -105,8 +113,9 @@ func main() {
 	}
 }
 
-func getNewLinks(ctx context.Context, searchUrl string, db *gorm.DB) []string {
+func getNewLinks(ctx context.Context, db *gorm.DB, searchUrl string, ruleOutSingleBathroom bool) []string {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 	ctx, cancel = chromedp.NewContext(ctx)
 	defer cancel()
 
@@ -133,19 +142,35 @@ func getNewLinks(ctx context.Context, searchUrl string, db *gorm.DB) []string {
 
 	for _, rentItem := range rentItems {
 		var house House
-		house.Id = rentItem.AttributeValue("data-bind")
-		err = chromedp.Run(ctx, chromedp.Text("div.item-title", &house.Title, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
-		if err != nil {
-			log.Println("Failed to retrieve item title")
-			if err == context.DeadlineExceeded {
-				break
-			}
-		}
 
 		var ok bool
 		err = chromedp.Run(ctx, chromedp.AttributeValue("a", "href", &house.Link, &ok, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
 		if err != nil || !ok {
 			log.Println("Failed to retrieve item link")
+			if err == context.DeadlineExceeded {
+				break
+			}
+		}
+
+		var layout string
+		if ruleOutSingleBathroom {
+			newTab, cancel := context.WithTimeout(ctx, 10*time.Second)
+			newTab, _ = chromedp.NewContext(newTab)
+			err := chromedp.Run(newTab, chromedp.Navigate(house.Link), chromedp.WaitVisible("#houseInfo"), chromedp.Text("#houseInfo > div.house-pattern > span", &layout))
+			if err != nil {
+				log.Println("Failed to retrieve item layout in detailed link")
+			}
+			if err == context.DeadlineExceeded || strings.Contains(layout, "1衛") {
+				cancel()
+				continue
+			}
+			cancel()
+		}
+
+		house.Id = rentItem.AttributeValue("data-bind")
+		err = chromedp.Run(ctx, chromedp.Text("div.item-title", &house.Title, chromedp.ByQuery, chromedp.FromNode(rentItem), chromedp.AtLeast(0)))
+		if err != nil {
+			log.Println("Failed to retrieve item title")
 			if err == context.DeadlineExceeded {
 				break
 			}
@@ -160,7 +185,11 @@ func getNewLinks(ctx context.Context, searchUrl string, db *gorm.DB) []string {
 			}
 		}
 		house.Type = itemStyles[0].Children[0].NodeValue
-		house.Layout = itemStyles[1].Children[0].NodeValue
+		if layout != "" {
+			house.Layout = layout
+		} else {
+			house.Layout = itemStyles[1].Children[0].NodeValue
+		}
 		house.Size = itemStyles[2].Children[0].NodeValue
 		house.Floor = itemStyles[3].Children[0].NodeValue
 
