@@ -43,7 +43,8 @@ func init() {
 	viper.SetDefault("dbDsn", "test.db")
 	viper.SetDefault("refreshIntervalMinutes", 10)
 	viper.SetDefault("debug", false)
-	viper.SetDefault("navigationTimeout", 60)
+	viper.SetDefault("fetchSubscriptionTimeout", 120)
+	viper.SetDefault("fetchHouseDetailTimeout", 10)
 	err := viper.ReadInConfig()
 	if err != nil {
 		log.Fatal(err)
@@ -115,7 +116,7 @@ func main() {
 }
 
 func getNewLinks(ctx context.Context, db *gorm.DB, searchUrl string, ruleOutSingleBathroom bool) []string {
-	ctx, cancel := context.WithTimeout(ctx, viper.GetDuration("navigationTimeout")*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, viper.GetDuration("fetchSubscriptionTimeout")*time.Second)
 	defer cancel()
 	ctx, cancel = chromedp.NewContext(ctx)
 	defer cancel()
@@ -148,7 +149,7 @@ func getNewLinks(ctx context.Context, db *gorm.DB, searchUrl string, ruleOutSing
 
 		var layout string
 		if ruleOutSingleBathroom {
-			newTab, cancel := context.WithTimeout(ctx, viper.GetDuration("navigationTimeout")*time.Second)
+			newTab, cancel := context.WithTimeout(ctx, viper.GetDuration("fetchHouseDetailTimeout")*time.Second)
 			newTab, _ = chromedp.NewContext(newTab)
 			err := chromedp.Run(newTab, chromedp.Navigate(house.Link), chromedp.WaitVisible("#houseInfo"), chromedp.Text("#houseInfo > div.house-pattern > span", &layout))
 			if err != nil {

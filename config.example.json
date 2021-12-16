@@ -2,7 +2,8 @@
   "debug": false,
   "dbDsn": "test.db",
   "refreshIntervalMinutes": 5,
-  "navigationTimeout": 60,
+  "fetchSubscriptionTimeout": 120,
+  "fetchHouseDetailTimeout": 10,
   "subscriptions": [
     {
       "name": "Your subscription name",
